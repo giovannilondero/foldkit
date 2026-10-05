@@ -1,10 +1,13 @@
 export {
   SlowPhase,
+  browserPlatform,
   defaultSlowCallback,
   embed,
   hydrate,
   makeApplication,
   makeElement,
+  onUnmountModule,
+  requireDispatch,
   run,
 } from './index.js'
 
@@ -46,4 +49,8 @@ export type {
   ViewTransitionConfig,
   ViewTransitionContext,
   ViewTransitionDecision,
+  Platform,
+  DOMAPI,
+  Module,
+  VNode,
 } from './index.js'

@@ -15,12 +15,9 @@ import {
 import { __hydrateVNode } from '../hydrate.js'
 import { FOLDKIT_APP_ATTRIBUTE } from '../hydrationMarker.js'
 import { MountRuntime, MountTracker } from '../mount/index.js'
+import type { Platform } from '../platform.js'
 import type { CommitNotifier } from '../render/commit.js'
-import {
-  VNode,
-  __patchVNode,
-  __recoverVNodeAfterPatchFailure,
-} from '../vdom.js'
+import { VNode, makeVdom } from '../vdom.js'
 import {
   type CrashConfig,
   type VNodeSlot,
@@ -100,7 +97,7 @@ export type Renderer<Model, Message> = Readonly<{
  * hydrating, the server-rendered root the first render adopts, the crash
  * renderer, the `Dispatch` service the view binds handlers to, the
  * synchronous render that runs the view and patches the DOM, the render
- * frame that runs in `requestAnimationFrame`, and the View Transition
+ * frame that runs in the Platform's `requestFrame`, and the View Transition
  * that frame may run inside. It also registers the teardown finalizer
  * that patches the tree away and restores the container, so build it
  * before forking the perpetual fibers: scope finalizers run
@@ -109,6 +106,7 @@ export type Renderer<Model, Message> = Readonly<{
  */
 export const makeRenderer = <Model, Message>({
   status,
+  platform,
   container,
   view,
   htmlBuilder,
@@ -128,6 +126,7 @@ export const makeRenderer = <Model, Message>({
   devToolsIntegration,
 }: Readonly<{
   status: RuntimeStatus
+  platform: Platform
   container: HTMLElement
   view: (model: Model, h: HtmlBuilder<Message>) => Document
   htmlBuilder: HtmlBuilder<Message>
@@ -224,13 +223,16 @@ export const makeRenderer = <Model, Message>({
     // slot synchronously, so no Ref is needed.
     const vnodeSlot: VNodeSlot = { maybeCurrentVNode: Option.none() }
 
+    const { domApi } = platform
+    const { patchVNode, recoverVNodeAfterPatchFailure } = makeVdom(platform)
+
     const patchRuntimeVNode = (
       maybeCurrentVNode: Option.Option<VNode>,
       nextVNode: VNode | null,
       seen?: Set<object>,
     ): VNode => {
       try {
-        return __patchVNode(
+        return patchVNode(
           maybeCurrentVNode,
           nextVNode,
           container,
@@ -244,7 +246,7 @@ export const makeRenderer = <Model, Message>({
           const maybeRecoveryVNode = vnodeSlot.maybeCurrentVNode
           if (Option.isSome(maybeRecoveryVNode)) {
             vnodeSlot.maybeCurrentVNode = Option.some(
-              __recoverVNodeAfterPatchFailure(maybeRecoveryVNode.value),
+              recoverVNodeAfterPatchFailure(maybeRecoveryVNode.value),
             )
           }
         } finally {
@@ -279,17 +281,20 @@ export const makeRenderer = <Model, Message>({
           onNone: () => Effect.void,
           onSome: currentVNode =>
             Effect.sync(() => {
-              const placeholderNode = __patchVNode(
+              const placeholderNode = patchVNode(
                 Option.some(currentVNode),
                 null,
                 container,
               ).elm
-              if (placeholderNode && placeholderNode.parentNode) {
-                placeholderNode.parentNode.replaceChild(
-                  container,
-                  placeholderNode,
-                )
-                container.replaceChildren()
+              if (placeholderNode === undefined) {
+                return
+              }
+
+              const parent = domApi.parentNode(placeholderNode)
+              if (parent !== null) {
+                domApi.insertBefore(parent, container, placeholderNode)
+                domApi.removeChild(parent, placeholderNode)
+                domApi.setTextContent(container, '')
               }
             }),
         })
@@ -329,6 +334,7 @@ export const makeRenderer = <Model, Message>({
           container,
           vnodeSlot,
           manageDocument,
+          patchVNode,
         )
         settlePendingCommit()
       })
@@ -706,7 +712,7 @@ export const makeRenderer = <Model, Message>({
     }
 
     // NOTE: render frames run as plain JavaScript inside the
-    // requestAnimationFrame callback. Messages arriving between frames mark
+    // Platform's requestFrame callback. Messages arriving between frames mark
     // at most one pending frame; the callback renders once with the latest
     // model.
     const scheduleRenderFrame = (
@@ -720,7 +726,7 @@ export const makeRenderer = <Model, Message>({
       }
       isRenderFrameScheduled = true
       commitNotifier.markCommitPending()
-      requestAnimationFrame(renderFramePlain)
+      platform.requestFrame(renderFramePlain)
     }
 
     const devToolsRenderBridge: DevToolsRenderBridge = {

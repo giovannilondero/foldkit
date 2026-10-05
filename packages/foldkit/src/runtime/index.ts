@@ -45,6 +45,18 @@ export type {
 
 export type { MakeRuntimeReturn } from './runtime.js'
 
+export { browserPlatform } from '../platform.js'
+
+export type { Platform } from '../platform.js'
+
+export { onUnmountModule } from '../onUnmountModule.js'
+
+export { requireDispatch } from '../html/runtimeSingleton.js'
+
+export type { DOMAPI } from '../snabbdom/htmldomapi.js'
+
+export type { Module, VNode } from '../snabbdom/index.js'
+
 export { SlowPhase, defaultSlowCallback } from './slowPhase.js'
 
 export type {

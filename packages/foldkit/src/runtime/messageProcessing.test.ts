@@ -180,6 +180,60 @@ describe('message processing', () => {
     }
   })
 
+  it('defers an over-budget burst with a timer on a host that has no MessageChannel', async () => {
+    vi.stubGlobal('MessageChannel', undefined)
+    const processedLog: Array<string> = []
+    let capturedDispatch: ((message: Message) => void) | null = null
+    let fakeNow = 0
+    const nowSpy = vi
+      .spyOn(performance, 'now')
+      .mockImplementation(() => fakeNow)
+
+    const update = (model: Model, message: Message): UpdateReturn => {
+      processedLog.push(
+        message._tag === 'BurnedBudget' ? message.label : message._tag,
+      )
+      if (message._tag === 'BurnedBudget') {
+        fakeNow += BURN_MS
+      }
+      return { model: { log: [...model.log, message._tag] } }
+    }
+
+    const element = makeElement({
+      Model,
+      init: () => ({ model: { log: [] } }),
+      update,
+      view: model => {
+        capturedDispatch = __requireDispatch()
+        return view(model)
+      },
+      container,
+    })
+
+    const fiber = Effect.runFork(element.start())
+    await vi.waitFor(() => {
+      expect(capturedDispatch).not.toBeNull()
+    })
+
+    try {
+      const dispatch = capturedDispatch!
+      const labels = ['burn-1', 'burn-2', 'burn-3', 'burn-4']
+      for (const label of labels) {
+        dispatch(Message.BurnedBudget({ label }))
+      }
+
+      expect(processedLog).toEqual(['burn-1', 'burn-2'])
+
+      await vi.waitFor(() => {
+        expect(processedLog).toEqual(labels)
+      })
+    } finally {
+      nowSpy.mockRestore()
+      vi.unstubAllGlobals()
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
   it('resets the drain budget when the browser had control between dispatches', async () => {
     const processedLog: Array<string> = []
     let capturedDispatch: ((message: Message) => void) | null = null

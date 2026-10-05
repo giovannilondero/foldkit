@@ -187,14 +187,19 @@ const inputEventValue = (target: EventTarget | null): string => {
   return ''
 }
 
+// NOTE: a non-browser Platform's nodes are not DOM Elements, and its host may
+// define no `Element` global at all, where a bare `instanceof Element` throws.
+const isDomElement = (value: unknown): value is Element =>
+  typeof Element !== 'undefined' && value instanceof Element
+
 const isEventTargetCurrentTarget = (event: Event): boolean =>
   event.target === event.currentTarget
 
 const isDevToolsFocusTarget = (target: EventTarget | null): boolean =>
-  target instanceof Element && target.id === DEVTOOLS_HOST_ID
+  isDomElement(target) && target.id === DEVTOOLS_HOST_ID
 
 const isFocusInsideCurrentTarget = (event: FocusEvent): boolean =>
-  event.currentTarget instanceof Element &&
+  isDomElement(event.currentTarget) &&
   event.relatedTarget instanceof Node &&
   event.currentTarget.contains(event.relatedTarget)
 
@@ -1984,7 +1989,7 @@ const attributeHandlers: AttributeHandlers = {
       dragenter: (event: Event) => {
         event.preventDefault()
         const zone = event.currentTarget
-        if (!(zone instanceof Element)) {
+        if (!isDomElement(zone)) {
           ctx.dispatch(message)
           return
         }
@@ -1998,7 +2003,7 @@ const attributeHandlers: AttributeHandlers = {
     updateDataOn(ctx, {
       dragleave: (event: Event) => {
         const zone = event.currentTarget
-        if (!(zone instanceof Element)) {
+        if (!isDomElement(zone)) {
           ctx.dispatch(message)
           return
         }
@@ -2030,7 +2035,7 @@ const attributeHandlers: AttributeHandlers = {
       drop: (event: Event) => {
         event.preventDefault()
         const zone = event.currentTarget
-        if (zone instanceof Element) {
+        if (isDomElement(zone)) {
           clearDragZoneAfterDrop(zone)
         }
         ctx.dispatch(message)
@@ -2043,7 +2048,7 @@ const attributeHandlers: AttributeHandlers = {
         /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
         const dragEvent = event as DragEvent
         const zone = dragEvent.currentTarget
-        if (zone instanceof Element) {
+        if (isDomElement(zone)) {
           clearDragZoneAfterDrop(zone)
         }
         const files: ReadonlyArray<File> = dragEvent.dataTransfer?.files
@@ -2511,13 +2516,13 @@ const attributeHandlers: AttributeHandlers = {
     ctx.data.hook = {
       ...ctx.data.hook,
       insert: vnode => {
-        if (vnode.elm instanceof Element) {
+        if (isDomElement(vnode.elm)) {
           const element = vnode.elm
           acquireMount(element)
         }
       },
       postpatch: (_previousVNode, vnode) => {
-        if (vnode.elm instanceof Element) {
+        if (isDomElement(vnode.elm)) {
           const state = onMountStates.get(vnode.elm)
           if (
             state?.owner === 'Replay' &&
@@ -2532,7 +2537,7 @@ const attributeHandlers: AttributeHandlers = {
         if (existingDestroy !== undefined) {
           existingDestroy(vnode)
         }
-        if (vnode.elm instanceof Element) {
+        if (isDomElement(vnode.elm)) {
           const state = onMountStates.get(vnode.elm)
           if (state) {
             releaseMount(state)
@@ -2696,7 +2701,7 @@ const applyControlledProps = (
   }
   Array.forEach(controlledProps, ({ propName, value }) => {
     const isOutputValue =
-      vnode.elm instanceof Element &&
+      isDomElement(vnode.elm) &&
       vnode.elm.localName === 'output' &&
       propName === 'value'
     /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
@@ -2704,7 +2709,7 @@ const applyControlledProps = (
       /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
       ;(vnode.elm as any)[propName] = value
     }
-    if (vnode.elm instanceof Element) {
+    if (isDomElement(vnode.elm)) {
       synchronizeControlledDefault(vnode.elm, propName, value)
     }
   })
@@ -2741,7 +2746,7 @@ const attachControlledContentOwnershipHook = (data: VNodeData): void => {
         oldProperties !== undefined &&
         Object.hasOwn(oldProperties, 'value') &&
         (properties === undefined || !Object.hasOwn(properties, 'value')) &&
-        vnode.elm instanceof Element
+        isDomElement(vnode.elm)
       ) {
         restoreUncontrolledContent(vnode.elm, vnode)
       }

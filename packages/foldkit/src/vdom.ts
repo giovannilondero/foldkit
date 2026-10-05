@@ -1,38 +1,16 @@
 import { Option } from 'effect'
 
-import { onUnmountModule } from './onUnmountModule.js'
-import { propsModule } from './propsModule.js'
-import {
-  type VNode,
-  attributesModule,
-  classModule,
-  datasetModule,
-  eventListenersModule,
-  h,
-  init,
-  styleModule,
-  toVNode,
-} from './snabbdom/index.js'
+import { type Platform, browserPlatform } from './platform.js'
+import { type VNode, h, init, toVNode } from './snabbdom/index.js'
 
 export type { VNode } from './snabbdom/index.js'
 export { toVNode }
 
-// NOTE: module order is load-bearing for hydration. `attributesModule` must run
-// before `propsModule`. When a controlled input is adopted, the seeded server
-// `value` attribute is removed by the attrs module first, which resets
-// `elm.value`; only then does the props module reassert the model value, its
-// `elm[key] !== cur` guard now seeing a cleared value. In the reverse order the
-// props write is skipped as a no-op and the later attribute removal blanks the
-// input. The controlled-input hydration tests fail if this order is changed.
-export const patch = init([
-  attributesModule,
-  classModule,
-  datasetModule,
-  eventListenersModule,
-  onUnmountModule,
-  propsModule,
-  styleModule,
-])
+const makePatch = (platform: Platform) =>
+  init([...platform.modules], platform.domApi)
+
+/** The patch function bound to the browser Platform. */
+export const patch = makePatch(browserPlatform)
 
 // NOTE: snabbdom records each element's live DOM node on `vnode.elm` by
 // mutating the vnode object during patch, and assumes one vnode object per tree
@@ -140,50 +118,86 @@ export const dedupeMemoizedResult = (
   return base
 }
 
-// NOTE: a fresh boot builds the whole tree so snabbdom fires every insert hook,
-// which is what runs Mounts. Patching `toVNode(container)` directly would let
-// snabbdom reuse a container whose existing DOM happens to match the new tree (a
-// fresh `run` over server-rendered DOM, or a Model-preservation restore),
-// leaving those hooks unfired and Mounts unattached. Patching against a comment
-// placed where the container was is never `sameVnode` with an element, so
-// `createElm` builds the tree fresh and replaces the container, exactly as a
-// boot into an empty container does.
-const patchFreshInto = (
-  container: HTMLElement,
-  nextVNode: VNode,
-  onRootPatched?: (vnode: VNode) => void,
-): VNode => {
-  const parent = container.parentNode
-  if (parent === null) {
-    return patch(toVNode(container), nextVNode, onRootPatched)
+/** The patch operations a runtime uses, bound to one Platform. Every node
+ *  operation, including mounting over and recovering the container, goes
+ *  through the Platform's `domApi`. */
+export type Vdom = Readonly<{
+  patchVNode: (
+    maybeCurrentVNode: Option.Option<VNode>,
+    nextVNode: VNode | null,
+    container: HTMLElement,
+    seen?: Set<object>,
+    onRootPatched?: (vnode: VNode) => void,
+  ) => VNode
+  recoverVNodeAfterPatchFailure: (currentVNode: VNode) => VNode
+}>
+
+export const makeVdom = (platform: Platform): Vdom => {
+  const { domApi } = platform
+  const platformPatch =
+    platform === browserPlatform ? patch : makePatch(platform)
+
+  // NOTE: a fresh boot builds the whole tree so snabbdom fires every insert
+  // hook, which is what runs Mounts. Patching `toVNode(container)` directly
+  // would let snabbdom reuse a container whose existing DOM happens to match
+  // the new tree (a fresh `run` over server-rendered DOM, or a
+  // Model-preservation restore), leaving those hooks unfired and Mounts
+  // unattached.
+  // Patching against a comment placed where the container was is never
+  // `sameVnode` with an element, so `createElm` builds the tree fresh and
+  // replaces the container, exactly as a boot into an empty container does.
+  const patchFreshInto = (
+    container: HTMLElement,
+    nextVNode: VNode,
+    onRootPatched?: (vnode: VNode) => void,
+  ): VNode => {
+    const parent = domApi.parentNode(container)
+    if (parent === null) {
+      return platformPatch(toVNode(container, domApi), nextVNode, onRootPatched)
+    }
+    const placeholder = domApi.createComment('')
+    domApi.insertBefore(parent, placeholder, container)
+    domApi.removeChild(parent, container)
+    return platformPatch(toVNode(placeholder, domApi), nextVNode, onRootPatched)
   }
-  const placeholder = container.ownerDocument.createComment('')
-  parent.replaceChild(placeholder, container)
-  return patch(toVNode(placeholder), nextVNode, onRootPatched)
+
+  const patchVNode: Vdom['patchVNode'] = (
+    maybeCurrentVNode,
+    nextVNode,
+    container,
+    seen,
+    onRootPatched,
+  ) => {
+    const dedupedVNode =
+      nextVNode !== null ? dedupeSharedVNodes(nextVNode, seen) : h('!')
+
+    if (Option.isNone(maybeCurrentVNode)) {
+      return patchFreshInto(container, dedupedVNode, onRootPatched)
+    }
+
+    return platformPatch(maybeCurrentVNode.value, dedupedVNode, onRootPatched)
+  }
+
+  const recoverVNodeAfterPatchFailure = (currentVNode: VNode): VNode => {
+    const currentElement = currentVNode.elm
+    const recoveryVNode = platformPatch(currentVNode, h('!'))
+
+    if (recoveryVNode.elm !== currentElement && currentElement !== undefined) {
+      const parent = domApi.parentNode(currentElement)
+      if (parent !== null) {
+        domApi.removeChild(parent, currentElement)
+      }
+    }
+
+    return recoveryVNode
+  }
+
+  return { patchVNode, recoverVNodeAfterPatchFailure }
 }
 
-export const __patchVNode = (
-  maybeCurrentVNode: Option.Option<VNode>,
-  nextVNode: VNode | null,
-  container: HTMLElement,
-  seen?: Set<object>,
-  onRootPatched?: (vnode: VNode) => void,
-): VNode => {
-  const dedupedVNode =
-    nextVNode !== null ? dedupeSharedVNodes(nextVNode, seen) : h('!')
+const browserVdom = makeVdom(browserPlatform)
 
-  if (Option.isNone(maybeCurrentVNode)) {
-    return patchFreshInto(container, dedupedVNode, onRootPatched)
-  }
+export const __patchVNode = browserVdom.patchVNode
 
-  return patch(maybeCurrentVNode.value, dedupedVNode, onRootPatched)
-}
-
-export const __recoverVNodeAfterPatchFailure = (currentVNode: VNode): VNode => {
-  const currentElement = currentVNode.elm
-  const recoveryVNode = patch(currentVNode, h('!'))
-  if (recoveryVNode.elm !== currentElement && currentElement?.parentNode) {
-    currentElement.parentNode.removeChild(currentElement)
-  }
-  return recoveryVNode
-}
+export const __recoverVNodeAfterPatchFailure =
+  browserVdom.recoverVNodeAfterPatchFailure

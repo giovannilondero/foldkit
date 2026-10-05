@@ -77,17 +77,29 @@ export const makeMessageQueue = <Message>({
     let lastDrainEndedAt = 0
     let isDrainDeferredToNextTask = false
     let maybeDeferredDrainChannel: MessageChannel | null = null
+    let deferredDrainTimeout: ReturnType<typeof setTimeout> | undefined
 
+    const runDeferredDrain = (): void => {
+      deferredDrainTimeout = undefined
+      isDrainDeferredToNextTask = false
+      syncWorkMsSinceYield = 0
+      drainPendingMessages()
+    }
+
+    // NOTE: hosts without MessageChannel, such as React Native, fall back
+    // to setTimeout(0), which also starts a new task.
     const scheduleDeferredDrain = (): void => {
+      isDrainDeferredToNextTask = true
+
+      if (typeof MessageChannel === 'undefined') {
+        deferredDrainTimeout = setTimeout(runDeferredDrain, 0)
+        return
+      }
+
       if (maybeDeferredDrainChannel === null) {
         maybeDeferredDrainChannel = new MessageChannel()
-        maybeDeferredDrainChannel.port2.onmessage = () => {
-          isDrainDeferredToNextTask = false
-          syncWorkMsSinceYield = 0
-          drainPendingMessages()
-        }
+        maybeDeferredDrainChannel.port2.onmessage = runDeferredDrain
       }
-      isDrainDeferredToNextTask = true
       maybeDeferredDrainChannel.port1.postMessage(null)
     }
 
@@ -97,6 +109,11 @@ export const makeMessageQueue = <Message>({
           maybeDeferredDrainChannel.port1.close()
           maybeDeferredDrainChannel.port2.close()
           maybeDeferredDrainChannel = null
+        }
+
+        if (deferredDrainTimeout !== undefined) {
+          clearTimeout(deferredDrainTimeout)
+          deferredDrainTimeout = undefined
         }
       }),
     )

@@ -20,6 +20,7 @@ import {
   __htmlBuilder as htmlBuilderFor,
 } from '../html/index.js'
 import type { ManagedResources } from '../managedResource/index.js'
+import { type Platform, browserPlatform } from '../platform.js'
 import type { Ports } from '../port/index.js'
 import { RenderCommit, createCommitNotifier } from '../render/commit.js'
 import type { Subscriptions } from '../subscription/subscription.js'
@@ -221,6 +222,12 @@ export type RuntimeConfig<
    */
   managedResources?: ManagedResources<Model, Message, ManagedResourceServices>
   devTools?: DevToolsConfig
+  /**
+   * The host the runtime renders into: its node operations, the snabbdom
+   * modules that apply attributes, props, styles, and listeners, and the
+   * render frame clock. Defaults to the browser DOM.
+   */
+  platform?: Platform
 }>
 
 export type FlagsSchemaConfig<Flags> = Readonly<{
@@ -303,6 +310,7 @@ export const makeRuntime = <
   resources,
   managedResources,
   devTools,
+  platform = browserPlatform,
 }: RuntimeConfig<
   Model,
   Message,
@@ -628,6 +636,7 @@ export const makeRuntime = <
           devToolsRenderBridge,
         } = yield* makeRenderer<Model, Message>({
           status,
+          platform,
           container,
           view,
           htmlBuilder,

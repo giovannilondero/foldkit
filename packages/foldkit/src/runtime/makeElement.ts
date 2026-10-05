@@ -2,6 +2,7 @@ import { Effect, Layer, Option, Predicate, Schema } from 'effect'
 
 import { Document, Html, type HtmlBuilder } from '../html/index.js'
 import type { ManagedResources } from '../managedResource/index.js'
+import type { Platform } from '../platform.js'
 import type { Ports } from '../port/index.js'
 import type { Subscriptions } from '../subscription/subscription.js'
 import type { Return as UpdateReturn } from '../update/index.js'
@@ -48,6 +49,12 @@ type BaseElementConfig<
   resources?: Layer.Layer<Resources>
   managedResources?: ManagedResources<Model, Message, ManagedResourceServices>
   devTools?: DevToolsConfig
+  /**
+   * The host the runtime renders into: its node operations, the snabbdom
+   * modules that apply attributes, props, styles, and listeners, and the
+   * render frame clock. Defaults to the browser DOM.
+   */
+  platform?: Platform
 }>
 
 /** Configuration for `makeElement` with Flags. */
@@ -231,6 +238,9 @@ export function makeElement<
     }),
     ...(Predicate.isNotUndefined(config.devTools) && {
       devTools: config.devTools,
+    }),
+    ...(Predicate.isNotUndefined(config.platform) && {
+      platform: config.platform,
     }),
   }
 

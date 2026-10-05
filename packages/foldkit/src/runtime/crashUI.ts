@@ -10,7 +10,7 @@ import {
   __setRuntime as setHtmlRuntime,
 } from '../html/index.js'
 import { MountTracker } from '../mount/index.js'
-import { VNode, __patchVNode } from '../vdom.js'
+import { VNode, type Vdom } from '../vdom.js'
 import { Dispatch } from './dispatch.js'
 import { applyDocumentMetadata } from './documentMetadata.js'
 
@@ -269,6 +269,7 @@ export const renderCrashView = <Model, Message>(
   container: HTMLElement,
   vnodeSlot: VNodeSlot,
   manageDocument: boolean,
+  patchVNode: Vdom['patchVNode'],
 ): void => {
   console.error('[foldkit] Application crash:', context.error)
 
@@ -298,7 +299,7 @@ export const renderCrashView = <Model, Message>(
       clearHtmlRuntime()
     }
 
-    const patchedVNode = __patchVNode(
+    const patchedVNode = patchVNode(
       vnodeSlot.maybeCurrentVNode,
       crashDocument.body,
       container,
@@ -321,7 +322,7 @@ export const renderCrashView = <Model, Message>(
       clearHtmlRuntime()
     }
 
-    const patchedVNode = __patchVNode(
+    const patchedVNode = patchVNode(
       vnodeSlot.maybeCurrentVNode,
       fallbackDocument.body,
       container,
