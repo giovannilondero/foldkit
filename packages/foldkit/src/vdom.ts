@@ -132,6 +132,8 @@ export type Vdom = Readonly<{
   recoverVNodeAfterPatchFailure: (currentVNode: VNode) => VNode
 }>
 
+/** Builds the {@link Vdom} for `platform`. The browser Platform reuses the
+ *  module-level `patch`, so it never initializes snabbdom twice. */
 export const makeVdom = (platform: Platform): Vdom => {
   const { domApi } = platform
   const platformPatch =
@@ -142,10 +144,10 @@ export const makeVdom = (platform: Platform): Vdom => {
   // would let snabbdom reuse a container whose existing DOM happens to match
   // the new tree (a fresh `run` over server-rendered DOM, or a
   // Model-preservation restore), leaving those hooks unfired and Mounts
-  // unattached.
-  // Patching against a comment placed where the container was is never
-  // `sameVnode` with an element, so `createElm` builds the tree fresh and
-  // replaces the container, exactly as a boot into an empty container does.
+  // unattached. Patching against a comment placed where the container was is
+  // never `sameVnode` with an element, so `createElm` builds the tree fresh
+  // and replaces the container, exactly as a boot into an empty container
+  // does.
   const patchFreshInto = (
     container: HTMLElement,
     nextVNode: VNode,
@@ -195,9 +197,6 @@ export const makeVdom = (platform: Platform): Vdom => {
   return { patchVNode, recoverVNodeAfterPatchFailure }
 }
 
-const browserVdom = makeVdom(browserPlatform)
-
-export const __patchVNode = browserVdom.patchVNode
-
-export const __recoverVNodeAfterPatchFailure =
-  browserVdom.recoverVNodeAfterPatchFailure
+/** `patchVNode` bound to the browser Platform. Internal: the runtime builds
+ *  its own {@link Vdom} with `makeVdom`; this binding exists for tests. */
+export const __patchVNode = makeVdom(browserPlatform).patchVNode

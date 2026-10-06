@@ -11,6 +11,7 @@ import {
   type Module,
   type Platform,
   type VNode,
+  browserPlatform,
   onUnmountModule,
 } from './public.js'
 import { embed } from './start.js'
@@ -314,6 +315,33 @@ describe('Platform', () => {
       expect(document.title).toBe('host page')
     } finally {
       handle.dispose()
+    }
+  })
+
+  it('treats an explicit browserPlatform as the default: makeApplication still writes document metadata', async () => {
+    const container = document.createElement('div')
+    container.id = 'browser-app'
+    document.body.appendChild(container)
+    document.title = 'host page'
+
+    const handle = embed(
+      makeApplication({
+        Model,
+        init: () => ({ model: { count: 0, name: '' } }),
+        update,
+        view: model => ({ title: 'browser app', body: view(model) }),
+        container,
+        platform: browserPlatform,
+      }),
+    )
+
+    try {
+      await vi.waitFor(() => {
+        expect(document.title).toBe('browser app')
+      })
+    } finally {
+      handle.dispose()
+      container.remove()
     }
   })
 })

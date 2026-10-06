@@ -49,11 +49,8 @@ type BaseElementConfig<
   resources?: Layer.Layer<Resources>
   managedResources?: ManagedResources<Model, Message, ManagedResourceServices>
   devTools?: DevToolsConfig
-  /**
-   * The host the runtime renders into: its node operations, the snabbdom
-   * modules that apply attributes, props, styles, and listeners, and the
-   * render frame clock. Defaults to the browser DOM.
-   */
+  /** The {@link Platform} the runtime renders into. Defaults to
+   *  `browserPlatform`. */
   platform?: Platform
 }>
 

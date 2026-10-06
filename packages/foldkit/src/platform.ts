@@ -25,17 +25,18 @@ export type Platform = Readonly<{
   requestFrame: (callback: () => void) => void
 }>
 
-// NOTE: module order is load-bearing for hydration. `attributesModule` must run
-// before `propsModule`. When a controlled input is adopted, the seeded server
-// `value` attribute is removed by the attrs module first, which resets
-// `elm.value`; only then does the props module reassert the model value, its
-// `elm[key] !== cur` guard now seeing a cleared value. In the reverse order the
-// props write is skipped as a no-op and the later attribute removal blanks the
-// input. The controlled-input hydration tests fail if this order is changed.
 /** The default Platform: the browser DOM, the stock module list, and
  *  `requestAnimationFrame`. */
 export const browserPlatform: Platform = {
   domApi: htmlDomApi,
+  // NOTE: module order is load-bearing for hydration. `attributesModule` must
+  // run before `propsModule`. When a controlled input is adopted, the seeded
+  // server `value` attribute is removed by the attrs module first, which
+  // resets `elm.value`; only then does the props module reassert the model
+  // value, its `elm[key] !== cur` guard now seeing a cleared value. In the
+  // reverse order the props write is skipped as a no-op and the later
+  // attribute removal blanks the input. The controlled-input hydration tests
+  // fail if this order is changed.
   modules: [
     attributesModule,
     classModule,

@@ -2,7 +2,7 @@ import { Layer, Option, Predicate, Schema } from 'effect'
 
 import { Document, type HtmlBuilder } from '../html/index.js'
 import type { ManagedResources } from '../managedResource/index.js'
-import type { Platform } from '../platform.js'
+import { type Platform, browserPlatform } from '../platform.js'
 import type { Ports } from '../port/index.js'
 import type { Subscriptions } from '../subscription/subscription.js'
 import type { Return as UpdateReturn } from '../update/index.js'
@@ -53,11 +53,9 @@ type BaseApplicationConfig<
   managedResources?: ManagedResources<Model, Message, ManagedResourceServices>
   devTools?: DevToolsConfig
   /**
-   * The host the runtime renders into: its node operations, the snabbdom
-   * modules that apply attributes, props, styles, and listeners, and the
-   * render frame clock. Defaults to the browser DOM. When set, the runtime
-   * neither looks for a server-rendered root to hydrate nor writes the
-   * document `<head>`, since a non-browser host has neither.
+   * The {@link Platform} the runtime renders into. Defaults to
+   * `browserPlatform`. Any other Platform skips the hydration lookup and
+   * never writes the document `<head>`, since a non-browser host has neither.
    */
   platform?: Platform
 }>
@@ -292,9 +290,10 @@ export function makeApplication<
 
   const hasRouting = 'routing' in config
   const hasFlags = 'Flags' in config
-  const hasPlatform = Predicate.isNotUndefined(platform)
+  const isCustomPlatform =
+    Predicate.isNotUndefined(platform) && platform !== browserPlatform
 
-  const hydration = hasPlatform
+  const hydration = isCustomPlatform
     ? undefined
     : findDocumentHydration(container, hasFlags)
 
@@ -305,7 +304,7 @@ export function makeApplication<
     // `getElementById` finds nothing and the stamp that would have named the
     // root is gone. There is no handoff to refuse further along, and the markup
     // is as live as any other refused page, so it is contained here.
-    if (!hasPlatform && hasServerRenderedMarkup(document)) {
+    if (!isCustomPlatform && hasServerRenderedMarkup(document)) {
       containRefusedPage(document)
     }
     throw new Error(
@@ -325,7 +324,7 @@ export function makeApplication<
     Model: config.Model,
     update: config.update,
     view: config.view,
-    manageDocument: !hasPlatform,
+    manageDocument: !isCustomPlatform,
     ports: config.ports,
     ...(config.subscriptions && { subscriptions: config.subscriptions }),
     container: resolvedContainer,
@@ -351,7 +350,7 @@ export function makeApplication<
     ...(Predicate.isNotUndefined(config.devTools) && {
       devTools: config.devTools,
     }),
-    ...(hasPlatform && { platform }),
+    ...(Predicate.isNotUndefined(platform) && { platform }),
   }
 
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
