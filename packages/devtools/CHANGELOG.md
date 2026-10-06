@@ -1,5 +1,11 @@
 # @foldkit/devtools
 
+## 0.167.0
+
+### Minor Changes
+
+- [#543](https://github.com/foldkit/foldkit/pull/543) [`f863187`](https://github.com/foldkit/foldkit/commit/f86318781a4ba5ea8ff051871d93f013d64dc2f5) Thanks [@devinjameson](https://github.com/devinjameson)! - Add copy-to-clipboard buttons for Model, Message, Command, and Mount payloads in the DevTools overlay. Each button copies fully expanded, formatted JSON regardless of the inspector tree's expanded state, then briefly shows a check mark. Repeat clicks are ignored while the clipboard write is pending or the check mark is shown. The buttons use the website's snippet copy icon. Long Command and Mount arguments wrap within the inspector.
+
 ## 0.166.0
 
 ### Minor Changes
